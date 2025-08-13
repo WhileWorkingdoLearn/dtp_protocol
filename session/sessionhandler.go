@@ -1,37 +1,54 @@
 package session
 
 import (
-	"net"
-	"time"
-)
+	"fmt"
+	"sync"
 
-type State int
-
-const (
-	Open State = iota
-	Closed
+	"github.com/WhilecodingDpLearn/dtp/protocol"
 )
 
 type SessionHandler struct {
-	id           string
-	state        State
-	expiration   time.Time
-	remoteAddr   *net.UDPAddr
-	createdAt    time.Time
-	lastReceived time.Time
-	lastSend     time.Time
-	expiresAt    time.Time
-	expectedSeq  uint32
-	lastAckedSeq uint32
-	//retransmitQueue []Packet
-	ackTimeout time.Duration
-
-	authToken     string
-	encryptionKey []byte
-
-	customData map[string]interface{}
+	sessionCache map[string]Session
+	mux          sync.Mutex
 }
 
-func (s SessionHandler) ChangeState(newState State) {
-	s.state = newState
+func NewSessionHandler() *SessionHandler {
+	return &SessionHandler{sessionCache: map[string]Session{}}
+}
+
+const idLength = 4
+
+func (sh *SessionHandler) validatePackage(p protocol.Package) error {
+	if len(p.SessionId) != idLength || len(p.Id) != idLength {
+		return fmt.Errorf("invalid package: missing session id or packageid")
+	}
+	return nil
+}
+
+func (sh *SessionHandler) Handle(p protocol.Package) error {
+	defer sh.mux.Unlock()
+
+	sh.mux.Lock()
+
+	err := sh.validatePackage(p)
+	if err != nil {
+		return err
+	}
+
+	session, ok := sh.sessionCache[p.SessionId]
+	if ok {
+		session.Receive(p)
+		return nil
+	}
+
+	session = NewSession()
+	session.Receive(p)
+
+	sh.sessionCache[p.SessionId] = session
+	return nil
+}
+
+func (sh *SessionHandler) HasSession(sessionId string) bool {
+	_, ok := sh.sessionCache[sessionId]
+	return ok
 }
