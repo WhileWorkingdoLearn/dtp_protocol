@@ -16,7 +16,7 @@ const (
 )
 
 type Session struct {
-	id              string
+	id              int
 	state           State
 	expiration      time.Time
 	remoteAddr      *net.UDPAddr
@@ -37,6 +37,10 @@ func NewSession() Session {
 	return Session{}
 }
 
+func (sh *Session) Validate() error {
+	return nil
+}
+
 func (s *Session) ChangeState(newState State) {
 	s.state = newState
 }
@@ -54,8 +58,8 @@ func (s *Session) IsPending() bool {
 }
 
 func (s *Session) Receive(p protocol.Package) {
-	if len(s.id) == 0 {
-		s.id = p.SessionId
+	if s.id == 0 {
+		s.id = p.Sid
 		now := time.Now()
 		s.createdAt = now
 		s.lastReceived = now

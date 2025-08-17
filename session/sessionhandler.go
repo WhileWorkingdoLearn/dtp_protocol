@@ -3,52 +3,74 @@ package session
 import (
 	"fmt"
 	"sync"
-
-	"github.com/WhilecodingDpLearn/dtp/protocol"
+	"time"
 )
 
 type SessionHandler struct {
-	sessionCache map[string]Session
+	sessionCache map[int]*Session
 	mux          sync.Mutex
 }
 
 func NewSessionHandler() *SessionHandler {
-	return &SessionHandler{sessionCache: map[string]Session{}}
+	return &SessionHandler{sessionCache: map[int]*Session{}}
 }
 
 const idLength = 4
 
-func (sh *SessionHandler) validatePackage(p protocol.Package) error {
-	if len(p.SessionId) != idLength || len(p.Id) != idLength {
-		return fmt.Errorf("invalid package: missing session id or packageid")
+func (sh *SessionHandler) HasSession(sessionId int) bool {
+	_, ok := sh.sessionCache[sessionId]
+	return ok
+}
+
+func (sh *SessionHandler) GetSession(sessionId int) *Session {
+	defer sh.mux.Unlock()
+	sh.mux.Lock()
+	session, ok := sh.sessionCache[sessionId]
+	if ok {
+		return session
 	}
 	return nil
 }
 
-func (sh *SessionHandler) Handle(p protocol.Package) error {
+func (sh *SessionHandler) NewSession(sessionId int) (*Session, error) {
 	defer sh.mux.Unlock()
-
 	sh.mux.Lock()
+	_, ok := sh.sessionCache[sessionId]
+	if ok {
+		return nil, fmt.Errorf("sessionHandler - StartSession, sessionId %v already exists", sessionId)
+	}
 
-	err := sh.validatePackage(p)
+	newSession := Session{id: sessionId, createdAt: time.Now()}
+	sh.sessionCache[sessionId] = &newSession
+	return &newSession, nil
+}
+
+func (sh *SessionHandler) AddSession(session *Session) error {
+	err := session.Validate()
 	if err != nil {
 		return err
 	}
 
-	session, ok := sh.sessionCache[p.SessionId]
+	defer sh.mux.Unlock()
+	sh.mux.Lock()
+
+	_, ok := sh.sessionCache[session.id]
 	if ok {
-		session.Receive(p)
-		return nil
+		return fmt.Errorf("sessionHandler - StartSession, sessionId %v already exists", &session.id)
 	}
 
-	session = NewSession()
-	session.Receive(p)
+	sh.sessionCache[session.id] = session
 
-	sh.sessionCache[p.SessionId] = session
 	return nil
 }
 
-func (sh *SessionHandler) HasSession(sessionId string) bool {
+func (sh *SessionHandler) RemoveSession(sessionId int) error {
+	defer sh.mux.Unlock()
+	sh.mux.Lock()
 	_, ok := sh.sessionCache[sessionId]
-	return ok
+	if ok {
+		delete(sh.sessionCache, sessionId)
+		return nil
+	}
+	return fmt.Errorf("Session not found %v", sessionId)
 }
