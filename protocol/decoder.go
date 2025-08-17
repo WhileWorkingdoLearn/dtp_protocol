@@ -8,6 +8,20 @@ import (
 	"strings"
 )
 
+//The decoder reconstructs a Package from its byte representation using a single pass over the input, for performance reasons avoiding reflection and hash maps.
+//It splits on | to obtain fields, splits each field once on the first :, resolves the key via a constant key→index table,
+//and detects duplicates with a fixed-size boolean array, which eliminates per-decode allocations and hashing overhead.
+//Integers are parsed with strconv.Atoi, the Pyl value is Base64-decoded back to the original []byte,
+//and Rma is unescaped in the inverse order (%7C→|, %3A→:, %25→%) before being parsed via net.ResolveUDPAddr("udp", ...).
+//The decoder expects the same schema as the encoder; unknown keys are rejected in the fast variant shown, and missing required keys are reported explicitly.
+
+//Edge cases and limitations arise mostly from the flat text framing and the fixed schema. Empty values are legal for Pyl and Rma and decode to nil;
+//empty values for integer fields are invalid and cause parsing errors. Invalid Base64 in Pyl or an ill-formed address string in Rma will surface as decoding errors;
+//IPv6 addresses are supported because addr.String() yields the bracketed form and ResolveUDPAddr accepts it once unescaped.
+//Only three delimiter characters are escaped, so other control characters remain as-is; if your downstream consumers treat newlines or tabs specially,
+//consider additional sanitization. Integer range is constrained by the platform int size; extremely large numeric inputs can overflow on 32-bit systems,
+//and you should enforce domain limits if negative values are not meaningful in your protocol.
+
 // Feste Feldindizes für bool-Array
 const (
 	fieldSid = iota

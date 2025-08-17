@@ -6,11 +6,24 @@ import (
 	"strings"
 )
 
-// Encode serialisiert ein Package ins Format
-// "Sid:<int>|PId:<int>|Bid:<int>|Lid:<int>|Pyl:<base64>|Rma:<escaped ip:port>"
+/*
+The encoder produces the canonical byte representation from a Package instance without reflection.Integer fields are written as base-10 strings.
+The binary payload Pyl is Base64-encoded so that it remains safe within the textual envelope.
+The UDP address Rma is serialized using addr.String() and made delimiter-safe by escaping %, :, and | to %25, %3A, and %7C, respectively; all other characters are left unchanged.
+Fields are emitted in a fixed order (Sid|PId|Bid|Lid|Pyl|Rma) to keep the output deterministic, and a strings.Builder is pre-grown to reduce reallocations.
+The function returns a []byte that is directly consumable by the decoder and stable across platforms as long as the struct definition remains unchanged.
+
+Edge cases and limitations arise mostly from the flat text framing and the fixed schema. Empty values are legal for Pyl and Rma and decode to nil;
+empty values for integer fields are invalid and cause parsing errors. Invalid Base64 in Pyl or an ill-formed address string in Rma will surface as decoding errors;
+IPv6 addresses are supported because addr.String() yields the bracketed form and ResolveUDPAddr accepts it once unescaped.
+Only three delimiter characters are escaped, so other control characters remain as-is; if your downstream consumers treat newlines or tabs specially,
+consider additional sanitization. Integer range is constrained by the platform int size; extremely large numeric inputs can overflow on 32-bit systems,
+and you should enforce domain limits if negative values are not meaningful in your protocol.
+*/
+
 func Encode(p Package) []byte {
 	var sb strings.Builder
-	// grob vorkonfigurieren, damit keine Re-Allokationen passieren
+
 	sb.Grow(128 + len(p.Pyl))
 
 	// ints
