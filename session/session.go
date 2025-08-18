@@ -4,7 +4,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/WhilecodingDpLearn/dtp/protocol"
+	"github.com/WhilecodingDoLearn/dtp/protocol"
 )
 
 type Session struct {
@@ -35,6 +35,7 @@ func (sh *Session) Validate() error {
 
 func (s *Session) ChangeState(newState int) {
 	s.state = newState
+
 }
 
 func (s *Session) IsAlive() bool {

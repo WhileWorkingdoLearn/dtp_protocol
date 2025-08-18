@@ -1,18 +1,17 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"net"
 
 	"time"
 
-	"github.com/WhilecodingDpLearn/dtp/protocol"
-	"github.com/WhilecodingDpLearn/dtp/session"
-	"github.com/WhilecodingDpLearn/dtp/udp_sim"
+	udp_sim "github.com/WhilecodingDoLearn/dtp/development"
+	"github.com/WhilecodingDoLearn/dtp/protocol"
+	"github.com/WhilecodingDoLearn/dtp/session"
 )
 
-func initConnection(conn *udp_sim.Conn) {
+func initConnection(conn io.WriteCloser) {
 	addr, err := net.ResolveUDPAddr("", ":8080")
 	if err != nil {
 		panic(err)
@@ -38,7 +37,7 @@ func initConnection(conn *udp_sim.Conn) {
 
 }
 
-func send(conn *udp_sim.Conn) {
+func send(conn io.WriteCloser) {
 	addr, err := net.ResolveUDPAddr("0.0.0.0", ":8080")
 	if err != nil {
 		panic(err)
@@ -74,48 +73,6 @@ func main() {
 	// sender: write 10 messages
 	go initConnection(conn)
 
-	// receiver: Read into a fixed-size buffer
-	sessionHandler := session.NewSessionHandler()
-
-	for {
-		buf := make([]byte, 256)
-		n, err := conn.Read(buf)
-		if err == io.EOF {
-			fmt.Println("connection closed")
-			break
-		}
-		if err != nil {
-			fmt.Println("read error:", err)
-			break
-		}
-		p, err := protocol.Decode(buf[:n])
-		if err != nil {
-			panic(err)
-		}
-
-		session, ok := sessionHandler.GetSession(p.Sid)
-		if ok {
-			fmt.Println("has session")
-			if p.Pid == 0 {
-				fmt.Println("ignore")
-				continue
-			}
-			if session.IsOpen() {
-				fmt.Println("is Open")
-			}
-
-		}
-
-		if !ok && p.Msg == protocol.REQ && p.Pid == 0 {
-			fmt.Println("Init session")
-			session, err := sessionHandler.NewSession(p.Sid)
-			if err != nil {
-				panic(err)
-			}
-			session.ChangeState(protocol.OPN)
-			sessionHandler.AddSession(session)
-		}
-		fmt.Printf("got packet: %v\n", p)
-	}
+	protocol.Handle(conn)
 
 }

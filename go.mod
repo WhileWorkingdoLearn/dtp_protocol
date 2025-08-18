@@ -1,4 +1,4 @@
-module github.com/WhilecodingDpLearn/dtp
+module github.com/WhilecodingDoLearn/dtp
 
 go 1.24.4
 

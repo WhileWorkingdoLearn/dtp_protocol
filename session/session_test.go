@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/WhilecodingDpLearn/dtp/protocol"
+	"github.com/WhilecodingDoLearn/dtp/protocol"
 	"github.com/stretchr/testify/assert"
 )
 

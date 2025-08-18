@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/WhilecodingDpLearn/dtp/protocol"
+	"github.com/WhilecodingDoLearn/dtp/protocol"
 )
 
 // JitterType controls the delay distribution.
@@ -214,7 +214,14 @@ func sampleDelay(cfg *Config) time.Duration {
 
 // Conn wraps the unreliableudp simulator channels into
 // a simple Read/Write interface.
-type Conn struct {
+
+type ReadWriteCloser interface {
+	Read(p []byte) (int, error)
+	Write(b []byte) (int, error)
+	Close() error
+}
+
+type Connection struct {
 	sendCh chan<- protocol.Package
 	recvCh <-chan protocol.Package
 	closed bool
@@ -222,13 +229,13 @@ type Conn struct {
 
 // DialUnreliableUDP creates a new Conn with all the same
 // knobs as unreliableudp.NewSimulator.
-func DialUnreliableUDP(opts ...Option) *Conn {
+func DialUnreliableUDP(opts ...Option) ReadWriteCloser {
 	send, recv := NewSimulator(opts...)
-	return &Conn{sendCh: send, recvCh: recv}
+	return &Connection{sendCh: send, recvCh: recv}
 }
 
 // Write sends the entire buffer as one packet.
-func (c *Conn) Write(b []byte) (int, error) {
+func (c *Connection) Write(b []byte) (int, error) {
 	if c.closed {
 		return 0, io.ErrClosedPipe
 	}
@@ -241,7 +248,7 @@ func (c *Conn) Write(b []byte) (int, error) {
 
 // Read blocks until the next packet arrives or the link closes.
 // It copies up to len(p) bytes and returns the count.
-func (c *Conn) Read(p []byte) (int, error) {
+func (c *Connection) Read(p []byte) (int, error) {
 	pkt, ok := <-c.recvCh
 	if !ok {
 		return 0, io.EOF
@@ -252,7 +259,7 @@ func (c *Conn) Read(p []byte) (int, error) {
 
 // Close shuts down the sending side; any in-flight packets
 // will still be delivered.
-func (c *Conn) Close() error {
+func (c *Connection) Close() error {
 	if !c.closed {
 		close(c.sendCh)
 		c.closed = true

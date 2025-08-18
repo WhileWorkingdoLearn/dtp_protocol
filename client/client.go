@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/WhilecodingDpLearn/dtp/protocol"
+	"github.com/WhilecodingDoLearn/dtp/protocol"
 )
 
 func main() {
