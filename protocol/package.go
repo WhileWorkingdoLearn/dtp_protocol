@@ -7,6 +7,8 @@ import (
 const (
 	REQ int = iota
 	OPN
+	ALI
+	CLD
 	ACK
 	RTY
 	ERR
@@ -15,7 +17,7 @@ const (
 type Package struct {
 	Sid int
 	Msg int
-	PId int
+	Pid int
 	Bid int
 	Lid int
 	Pyl []byte

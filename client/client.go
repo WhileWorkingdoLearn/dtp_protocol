@@ -22,7 +22,7 @@ func main() {
 	p := protocol.Package{
 		Sid: 1234,
 		Msg: protocol.REQ,
-		PId: 0,
+		Pid: 0,
 		Bid: 0,
 		Lid: 3,
 		Pyl: []byte("ABC"),

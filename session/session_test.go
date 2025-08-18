@@ -38,11 +38,11 @@ func (b *Buffer) add(packet protocol.Package) {
 	packetCache, ok := b.frames[frame]
 	if !ok {
 		newCache := make([]protocol.Package, frame.end-frame.start+1, frame.end-frame.start+1)
-		newCache[packet.PId] = packet
+		newCache[packet.Pid] = packet
 		b.frames[frame] = &PacketCache{cache: newCache, received: 1}
 	}
 	if ok {
-		packetCache.cache[packet.PId] = packet
+		packetCache.cache[packet.Pid] = packet
 		packetCache.received++
 		b.frames[frame] = packetCache
 	}
@@ -60,7 +60,7 @@ func (b *Buffer) isFull(frame Frame) bool {
 
 	isComplete := true
 	for idx, p := range cache.cache {
-		if p.Sid+idx != p.PId {
+		if p.Sid+idx != p.Pid {
 			isComplete = false
 			break
 		}
@@ -72,7 +72,7 @@ func (b *Buffer) isFull(frame Frame) bool {
 func (b *Buffer) Write(reader protocol.PackageReader) {
 	p := reader.Read()
 
-	if p.PId < p.Sid || p.PId > p.Lid {
+	if p.Pid < p.Sid || p.Pid > p.Lid {
 
 	}
 
@@ -87,7 +87,7 @@ func TestBuffer(t *testing.T) {
 		bufferSize: 1000,
 	}
 
-	packet := protocol.Package{Sid: 123, PId: 0, Bid: 0, Lid: 3, Pyl: []byte{'A'}}
+	packet := protocol.Package{Sid: 123, Pid: 0, Bid: 0, Lid: 3, Pyl: []byte{'A'}}
 
 	b.add(packet)
 	testframe := Frame{start: 0, end: 3}

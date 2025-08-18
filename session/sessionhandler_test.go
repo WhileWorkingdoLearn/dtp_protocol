@@ -18,7 +18,8 @@ func TestSessionHandler(t *testing.T) {
 	has := sessionHandler.HasSession(123456)
 	assert.Equal(t, true, has)
 
-	sessionInStore := sessionHandler.GetSession(123456)
+	sessionInStore, ok := sessionHandler.GetSession(123456)
+	assert.True(t, ok)
 	assert.NotNil(t, sessionInStore)
 	assert.Equal(t, 123456, sessionInStore.id)
 

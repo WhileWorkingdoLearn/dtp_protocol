@@ -88,7 +88,7 @@ func Decode(b []byte) (Package, error) {
 			if err != nil {
 				return out, fmt.Errorf("PId: %w", err)
 			}
-			out.PId = n
+			out.Pid = n
 		case fieldBid:
 			n, err := strconv.Atoi(raw)
 			if err != nil {

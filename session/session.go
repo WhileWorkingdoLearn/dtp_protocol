@@ -7,17 +7,9 @@ import (
 	"github.com/WhilecodingDpLearn/dtp/protocol"
 )
 
-type State int
-
-const (
-	Open State = iota
-	Pending
-	Closed
-)
-
 type Session struct {
 	id              int
-	state           State
+	state           int
 	expiration      time.Time
 	remoteAddr      *net.UDPAddr
 	createdAt       time.Time
@@ -41,33 +33,18 @@ func (sh *Session) Validate() error {
 	return nil
 }
 
-func (s *Session) ChangeState(newState State) {
+func (s *Session) ChangeState(newState int) {
 	s.state = newState
 }
 
 func (s *Session) IsAlive() bool {
-	return s.state != Closed
+	return s.state != protocol.ALI
 }
 
 func (s *Session) IsOpen() bool {
-	return s.state != Open
+	return s.state != protocol.OPN
 }
 
 func (s *Session) IsPending() bool {
-	return s.state != Pending
-}
-
-func (s *Session) Receive(p protocol.Package) {
-	if s.id == 0 {
-		s.id = p.Sid
-		now := time.Now()
-		s.createdAt = now
-		s.lastReceived = now
-		s.expiresAt = now.Add(60 * time.Second)
-	}
-
-}
-
-func (s *Session) Send(p protocol.Package) {
-
+	return s.state != protocol.RTY
 }

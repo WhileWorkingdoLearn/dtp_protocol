@@ -44,7 +44,7 @@ func main() {
 			nP := protocol.Package{
 				Sid: 1234,
 				Msg: protocol.OPN,
-				PId: 0,
+				Pid: 0,
 				Bid: 0,
 				Lid: 0,
 				Pyl: []byte{},

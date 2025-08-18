@@ -22,14 +22,11 @@ func (sh *SessionHandler) HasSession(sessionId int) bool {
 	return ok
 }
 
-func (sh *SessionHandler) GetSession(sessionId int) *Session {
+func (sh *SessionHandler) GetSession(sessionId int) (*Session, bool) {
 	defer sh.mux.Unlock()
 	sh.mux.Lock()
 	session, ok := sh.sessionCache[sessionId]
-	if ok {
-		return session
-	}
-	return nil
+	return session, ok
 }
 
 func (sh *SessionHandler) NewSession(sessionId int) (*Session, error) {

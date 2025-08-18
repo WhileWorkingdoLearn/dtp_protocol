@@ -36,7 +36,7 @@ func Encode(p Package) []byte {
 	sb.WriteByte('|')
 
 	sb.WriteString("PId:")
-	sb.WriteString(strconv.Itoa(p.PId))
+	sb.WriteString(strconv.Itoa(p.Pid))
 	sb.WriteByte('|')
 
 	sb.WriteString("Bid:")
