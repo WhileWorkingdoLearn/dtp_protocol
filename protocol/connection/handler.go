@@ -29,26 +29,53 @@ func Listen(connection io.ReadWriteCloser) {
 			panic(err)
 		}
 
-		handle(p)
+		handle(p, sessionHandler)
 
 	}
 }
 
-func handle(p protocol.Package) {
-	var session *Session
+func Write(connection io.WriteCloser) {
 
-	//1 . Check if session is existent, if not create a new one
-	s, ok := sessionHandler.GetSession(p.Sid)
-	if !ok && p.Msg == REQ {
-		session = NewSession(p.Sid)
-		session.state = OPN
-	} else {
-		session = s
-	}
+}
 
-	switch session.state {
-	case OPN:
-	case ACK:
+func handle(p protocol.Package, sh *SessionHandler) {
+
+	//1 . Check if session is existent, if not create a new one. Check if packags.Msg == Request new Connection
+
+	switch p.Msg {
+	case protocol.REQ:
+		session, ok := sh.GetSession(p.Sid)
+		if !ok {
+			fmt.Println("Not found")
+			session = NewSession(p.Sid)
+			err := sh.AddSession(session)
+			if err != nil {
+				fmt.Println(err)
+			}
+			return
+		}
+		if session.state == protocol.REQ {
+			fmt.Println("Change session state to OPN")
+			session.state = protocol.OPN
+		}
+
+	case protocol.OPN:
+		session, ok := sh.GetSession(p.Sid)
+		if !ok {
+			fmt.Println("error")
+			return
+		}
+		if session.state == protocol.REQ {
+			fmt.Println("Ignore")
+			return
+		}
+		if session.state == protocol.OPN {
+			fmt.Println("Set State to opwn")
+			session.state = protocol.ACK
+			return
+		}
+
+	case protocol.ACK:
 	default:
 		{
 		}

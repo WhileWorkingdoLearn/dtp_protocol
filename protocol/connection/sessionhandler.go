@@ -57,3 +57,7 @@ func (sh *SessionHandler) RemoveSession(sessionId int) error {
 	}
 	return fmt.Errorf("Session not found %v", sessionId)
 }
+
+func (sh *SessionHandler) Size() int {
+	return len(sh.sessionCache)
+}

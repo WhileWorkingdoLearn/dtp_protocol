@@ -3,6 +3,8 @@ package dtp
 import (
 	"net"
 	"time"
+
+	dtp "github.com/WhilecodingDoLearn/dtp/protocol/types"
 )
 
 const (
@@ -17,7 +19,7 @@ const (
 
 type Session struct {
 	id              int
-	state           int
+	state           dtp.State
 	expiration      time.Time
 	remoteAddr      *net.UDPAddr
 	createdAt       time.Time
@@ -46,12 +48,12 @@ func (sh *Session) Validate() error {
 	return nil
 }
 
-func (sh *Session) State() int {
+func (sh *Session) State() dtp.State {
 	return sh.state
 }
 
 // Creates a new session
 func NewSession(sessionId int) *Session {
-	newSession := Session{id: sessionId, createdAt: time.Now()}
+	newSession := Session{id: sessionId, createdAt: time.Now(), state: dtp.REQ}
 	return &newSession
 }

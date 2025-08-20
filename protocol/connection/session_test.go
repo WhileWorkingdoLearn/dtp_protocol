@@ -1,10 +1,10 @@
 package dtp
 
 import (
-	"net"
 	"sync"
 	"testing"
 
+	dtp "github.com/WhilecodingDoLearn/dtp/protocol/types"
 	protocol "github.com/WhilecodingDoLearn/dtp/protocol/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -15,15 +15,7 @@ type Frame struct {
 }
 
 type PacketCache struct {
-	cache []struct {
-		Sid int
-		Msg int
-		Pid int
-		Bid int
-		Lid int
-		Pyl []byte
-		Rma *net.UDPAddr
-	}
+	cache    []dtp.Package
 	received int
 }
 
@@ -41,28 +33,12 @@ Connection has already been established.
 
 */
 
-func (b *Buffer) add(packet struct {
-	Sid int
-	Msg int
-	Pid int
-	Bid int
-	Lid int
-	Pyl []byte
-	Rma *net.UDPAddr
-}) {
+func (b *Buffer) add(packet protocol.Package) {
 
 	frame := Frame{start: packet.Sid, end: packet.Lid}
 	packetCache, ok := b.frames[frame]
 	if !ok {
-		newCache := make([]struct {
-			Sid int
-			Msg int
-			Pid int
-			Bid int
-			Lid int
-			Pyl []byte
-			Rma *net.UDPAddr
-		}, frame.end-frame.start+1, frame.end-frame.start+1)
+		newCache := make([]protocol.Package, frame.end-frame.start+1, frame.end-frame.start+1)
 		newCache[packet.Pid] = packet
 		b.frames[frame] = &PacketCache{cache: newCache, received: 1}
 	}
@@ -112,15 +88,7 @@ func TestBuffer(t *testing.T) {
 		bufferSize: 1000,
 	}
 
-	packet := struct {
-		Sid int
-		Msg int
-		Pid int
-		Bid int
-		Lid int
-		Pyl []byte
-		Rma *net.UDPAddr
-	}{Sid: 123, Pid: 0, Bid: 0, Lid: 3, Pyl: []byte{'A'}}
+	packet := protocol.Package{Sid: 123, Pid: 0, Bid: 0, Lid: 3, Pyl: []byte{'A'}}
 
 	b.add(packet)
 	testframe := Frame{start: 0, end: 3}

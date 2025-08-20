@@ -2,8 +2,10 @@ package dtp
 
 import "net"
 
+type State int
+
 const (
-	REQ int = iota
+	REQ State = iota
 	OPN
 	ALI
 	CLD
@@ -14,7 +16,7 @@ const (
 
 type Package struct {
 	Sid int
-	Msg int
+	Msg State
 	Pid int
 	Bid int
 	Lid int
