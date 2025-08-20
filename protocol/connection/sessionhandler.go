@@ -3,7 +3,6 @@ package dtp
 import (
 	"fmt"
 	"sync"
-	"time"
 )
 
 type SessionHandler struct {
@@ -27,19 +26,6 @@ func (sh *SessionHandler) GetSession(sessionId int) (*Session, bool) {
 	sh.mux.Lock()
 	session, ok := sh.sessionCache[sessionId]
 	return session, ok
-}
-
-func (sh *SessionHandler) NewSession(sessionId int) (*Session, error) {
-	defer sh.mux.Unlock()
-	sh.mux.Lock()
-	_, ok := sh.sessionCache[sessionId]
-	if ok {
-		return nil, fmt.Errorf("sessionHandler - StartSession, sessionId %v already exists", sessionId)
-	}
-
-	newSession := Session{id: sessionId, createdAt: time.Now()}
-	sh.sessionCache[sessionId] = &newSession
-	return &newSession, nil
 }
 
 func (sh *SessionHandler) AddSession(session *Session) error {

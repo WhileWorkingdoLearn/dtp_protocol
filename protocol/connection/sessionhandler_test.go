@@ -8,9 +8,8 @@ import (
 
 func TestSessionHandler(t *testing.T) {
 	sessionHandler := NewSessionHandler()
-	session, err := sessionHandler.NewSession(123456)
+	session := NewSession(123456)
 	assert.NotNil(t, session)
-	assert.Nil(t, err)
 
 	errAdd := sessionHandler.AddSession(session)
 	assert.NotNil(t, errAdd)

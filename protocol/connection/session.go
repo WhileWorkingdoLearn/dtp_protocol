@@ -42,27 +42,16 @@ type Session struct {
 	customData    map[string]interface{}
 }
 
-func NewSession() Session {
-	return Session{}
-}
-
 func (sh *Session) Validate() error {
 	return nil
 }
 
-func (s *Session) ChangeState(newState int) {
-	s.state = newState
-
+func (sh *Session) State() int {
+	return sh.state
 }
 
-func (s *Session) IsAlive() bool {
-	return s.state != ALI
-}
-
-func (s *Session) IsOpen() bool {
-	return s.state != OPN
-}
-
-func (s *Session) IsPending() bool {
-	return s.state != RTY
+// Creates a new session
+func NewSession(sessionId int) *Session {
+	newSession := Session{id: sessionId, createdAt: time.Now()}
+	return &newSession
 }

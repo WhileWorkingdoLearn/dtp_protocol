@@ -7,8 +7,7 @@ import (
 	"time"
 
 	udp_sim "github.com/WhilecodingDoLearn/dtp/development"
-	dtpHandler "github.com/WhilecodingDoLearn/dtp/protocol/connection/handler"
-	session "github.com/WhilecodingDoLearn/dtp/protocol/connection/session"
+	connection "github.com/WhilecodingDoLearn/dtp/protocol/connection"
 	dtp "github.com/WhilecodingDoLearn/dtp/protocol/dtp"
 	protocol "github.com/WhilecodingDoLearn/dtp/protocol/types"
 )
@@ -18,7 +17,7 @@ func initConnection(conn io.WriteCloser) {
 	if err != nil {
 		panic(err)
 	}
-	sid, err := session.GenerateSessionId(0, 30001)
+	sid, err := connection.GenerateSessionId(0, 30001)
 	if err != nil {
 
 	}
@@ -75,6 +74,6 @@ func main() {
 	// sender: write 10 messages
 	go initConnection(conn)
 
-	dtpHandler.Handle(conn)
+	connection.Listen(conn)
 
 }
