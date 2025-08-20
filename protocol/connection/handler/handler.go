@@ -1,10 +1,12 @@
-package protocol
+package dtp
 
 import (
 	"fmt"
 	"io"
 
-	"github.com/WhilecodingDoLearn/dtp/session"
+	session "github.com/WhilecodingDoLearn/dtp/protocol/connection/session"
+	"github.com/WhilecodingDoLearn/dtp/protocol/dtp"
+	protocol "github.com/WhilecodingDoLearn/dtp/protocol/types"
 )
 
 func Handle(connection io.ReadWriteCloser) {
@@ -22,26 +24,26 @@ func Handle(connection io.ReadWriteCloser) {
 			fmt.Println("read error:", err)
 			break
 		}
-		p, err := Decode(buf[:n])
+		p, err := dtp.Decode(buf[:n])
 		if err != nil {
 			panic(err)
 		}
 
 		if _, ok := sessionHandler.GetSession(p.Sid); ok {
-			if p.Msg == REQ {
+			if p.Msg == protocol.REQ {
 				fmt.Println("ignore")
 				continue
 			}
 
 		} else {
 
-			if !ok && p.Msg == REQ && p.Pid == 0 {
+			if !ok && p.Msg == protocol.REQ && p.Pid == 0 {
 				fmt.Println("Init session")
 				session, err := sessionHandler.NewSession(p.Sid)
 				if err != nil {
 					panic(err)
 				}
-				session.ChangeState(OPN)
+				session.ChangeState(protocol.OPN)
 				sessionHandler.AddSession(session)
 
 			}

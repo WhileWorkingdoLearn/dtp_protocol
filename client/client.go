@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/WhilecodingDoLearn/dtp/protocol"
+	dtp "github.com/WhilecodingDoLearn/dtp/protocol/dtp"
+	protocol "github.com/WhilecodingDoLearn/dtp/protocol/types"
 )
 
 func main() {
@@ -29,7 +30,7 @@ func main() {
 		Rma: &serverAddr,
 	}
 
-	data := protocol.Encode(p)
+	data := dtp.Encode(p)
 	_, err = conn.Write(data)
 	if err != nil {
 		panic(err)
@@ -43,7 +44,7 @@ func main() {
 		if err != nil {
 			break
 		}
-		p, err := protocol.Decode(buffer[:n])
+		p, err := dtp.Decode(buffer[:n])
 		if err != nil {
 			panic(err)
 		}

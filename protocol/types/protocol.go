@@ -1,8 +1,6 @@
-package protocol
+package dtp
 
-import (
-	"net"
-)
+import "net"
 
 const (
 	REQ int = iota

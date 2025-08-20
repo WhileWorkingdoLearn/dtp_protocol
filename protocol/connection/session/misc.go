@@ -1,4 +1,4 @@
-package session
+package dtp
 
 import (
 	"crypto/rand"

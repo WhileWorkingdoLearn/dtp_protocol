@@ -1,4 +1,4 @@
-package protocol
+package dtp
 
 import (
 	"encoding/base64"
@@ -6,6 +6,8 @@ import (
 	"net"
 	"strconv"
 	"strings"
+
+	protocol "github.com/WhilecodingDoLearn/dtp/protocol/types"
 )
 
 //The decoder reconstructs a Package from its byte representation using a single pass over the input, for performance reasons avoiding reflection and hash maps.
@@ -46,8 +48,8 @@ var fieldIndex = map[string]int{
 
 // Decode decodiert "Field:Value|Field:Value|..." in ein Package.
 // Nutzt ein bool-Array statt Map für Duplikaterkennung → zero alloc, O(1).
-func Decode(b []byte) (Package, error) {
-	var out Package
+func Decode(b []byte) (protocol.Package, error) {
+	var out protocol.Package
 	seen := [numFields]bool{}
 
 	parts := strings.Split(string(b), "|")

@@ -6,7 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/WhilecodingDoLearn/dtp/protocol"
+	dtp "github.com/WhilecodingDoLearn/dtp/protocol/types"
+	protocol "github.com/WhilecodingDoLearn/dtp/protocol/types"
 )
 
 // JitterType controls the delay distribution.
@@ -85,7 +86,7 @@ func WithBandwidthLimit(maxInFlight int) Option {
 
 // NewSimulator constructs your unreliable “link.”
 func NewSimulator(opts ...Option) (
-	sendCh chan<- protocol.Package,
+	sendCh chan<- dtp.Package,
 	recvCh <-chan protocol.Package,
 ) {
 	// Default parameters

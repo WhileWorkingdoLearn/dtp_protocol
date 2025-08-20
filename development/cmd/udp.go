@@ -7,8 +7,10 @@ import (
 	"time"
 
 	udp_sim "github.com/WhilecodingDoLearn/dtp/development"
-	"github.com/WhilecodingDoLearn/dtp/protocol"
-	"github.com/WhilecodingDoLearn/dtp/session"
+	dtpHandler "github.com/WhilecodingDoLearn/dtp/protocol/connection/handler"
+	session "github.com/WhilecodingDoLearn/dtp/protocol/connection/session"
+	dtp "github.com/WhilecodingDoLearn/dtp/protocol/dtp"
+	protocol "github.com/WhilecodingDoLearn/dtp/protocol/types"
 )
 
 func initConnection(conn io.WriteCloser) {
@@ -30,7 +32,7 @@ func initConnection(conn io.WriteCloser) {
 			Pyl: []byte(""),
 			Rma: addr,
 		}
-		_, _ = conn.Write(protocol.Encode(msg))
+		_, _ = conn.Write(dtp.Encode(msg))
 		time.Sleep(100 * time.Millisecond)
 	}
 	conn.Close()
@@ -53,7 +55,7 @@ func send(conn io.WriteCloser) {
 			Pyl: []byte("Hello"),
 			Rma: addr,
 		}
-		_, _ = conn.Write(protocol.Encode(msg))
+		_, _ = conn.Write(dtp.Encode(msg))
 		time.Sleep(100 * time.Millisecond)
 	}
 	conn.Close()
@@ -73,6 +75,6 @@ func main() {
 	// sender: write 10 messages
 	go initConnection(conn)
 
-	protocol.Handle(conn)
+	dtpHandler.Handle(conn)
 
 }

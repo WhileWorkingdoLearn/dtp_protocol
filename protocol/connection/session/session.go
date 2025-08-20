@@ -1,10 +1,18 @@
-package session
+package dtp
 
 import (
 	"net"
 	"time"
+)
 
-	"github.com/WhilecodingDoLearn/dtp/protocol"
+const (
+	REQ int = iota
+	OPN
+	ALI
+	CLD
+	ACK
+	RTY
+	ERR
 )
 
 type Session struct {
@@ -18,11 +26,20 @@ type Session struct {
 	expiresAt       time.Time
 	expectedSeq     uint32
 	lastAckedSeq    uint32
-	retransmitQueue []protocol.Package
-	ackTimeout      time.Duration
-	authToken       string
-	encryptionKey   []byte
-	customData      map[string]interface{}
+	retransmitQueue []struct {
+		Sid int
+		Msg int
+		Pid int
+		Bid int
+		Lid int
+		Pyl []byte
+		Rma *net.UDPAddr
+	}
+
+	ackTimeout    time.Duration
+	authToken     string
+	encryptionKey []byte
+	customData    map[string]interface{}
 }
 
 func NewSession() Session {
@@ -39,13 +56,13 @@ func (s *Session) ChangeState(newState int) {
 }
 
 func (s *Session) IsAlive() bool {
-	return s.state != protocol.ALI
+	return s.state != ALI
 }
 
 func (s *Session) IsOpen() bool {
-	return s.state != protocol.OPN
+	return s.state != OPN
 }
 
 func (s *Session) IsPending() bool {
-	return s.state != protocol.RTY
+	return s.state != RTY
 }

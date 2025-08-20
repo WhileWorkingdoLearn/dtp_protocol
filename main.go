@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/WhilecodingDoLearn/dtp/protocol"
+	dtp "github.com/WhilecodingDoLearn/dtp/protocol/dtp"
+	protocol "github.com/WhilecodingDoLearn/dtp/protocol/types"
 )
 
 func main() {
@@ -32,7 +33,7 @@ func main() {
 			panic(err)
 		}
 
-		data, err := protocol.Decode(buffer[:n])
+		data, err := dtp.Decode(buffer[:n])
 		if err != nil {
 			panic(err)
 		}
@@ -50,7 +51,7 @@ func main() {
 				Pyl: []byte{},
 				Rma: &addr,
 			}
-			d := protocol.Encode(nP)
+			d := dtp.Encode(nP)
 			conn.WriteTo(d, clientAddr)
 			fmt.Println("Send msg to")
 			break

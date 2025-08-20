@@ -1,9 +1,11 @@
-package protocol
+package dtp
 
 import (
 	"encoding/base64"
 	"strconv"
 	"strings"
+
+	protocol "github.com/WhilecodingDoLearn/dtp/protocol/types"
 )
 
 /*
@@ -21,7 +23,7 @@ consider additional sanitization. Integer range is constrained by the platform i
 and you should enforce domain limits if negative values are not meaningful in your protocol.
 */
 
-func Encode(p Package) []byte {
+func Encode(p protocol.Package) []byte {
 	var sb strings.Builder
 
 	sb.Grow(128 + len(p.Pyl))
