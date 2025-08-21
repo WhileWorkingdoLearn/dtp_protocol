@@ -27,7 +27,8 @@ func TestHandle(t *testing.T) {
 		1,
 		true,
 		dtp.OPN,
-	}}
+	},
+	}
 
 	sh := SessionHandler{sessionCache: make(map[int]*Session)}
 	for _, subtest := range tests {

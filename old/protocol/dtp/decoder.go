@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	protocol "github.com/WhilecodingDoLearn/dtp/protocol/types"
+	protocol "github.com/WhilecodingDoLearn/old/dtp/protocol/types"
 )
 
 //The decoder reconstructs a Package from its byte representation using a single pass over the input, for performance reasons avoiding reflection and hash maps.
