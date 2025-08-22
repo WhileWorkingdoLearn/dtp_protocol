@@ -24,15 +24,15 @@ func (dtpH DTPHandler) Read(b []byte) (*Message, error) {
 	if err != nil {
 
 	}
-	frm := Frame{start: p.Bid, end: p.Lid}
+	frm := Frame{start: p.FrameBegin, end: p.FrameEnd}
 	ps, ok := dtpH.cache[frm]
 	if ok {
-		ps[p.Pid] = p
+		ps[p.PackedID] = p
 		return nil, nil
 	}
-	ps = make([]codec.Package, p.Lid-p.Bid+1, p.Lid-p.Bid+1)
-	ps[p.Pid] = p
-	
+	ps = make([]codec.Package, p.FrameEnd-p.FrameBegin+1, p.FrameEnd-p.FrameBegin+1)
+	ps[p.PackedID] = p
+
 	return nil, nil
 }
 

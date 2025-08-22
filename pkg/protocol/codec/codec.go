@@ -49,15 +49,15 @@ const (
 type State int
 
 type Package struct {
-	Sid int
-	Uid int
-	Msg State
-	Pid int
-	Bid int
-	Lid int
-	Tol int
-	Pyl []byte
-	Rma *net.UDPAddr
+	SessionID     int
+	UserID        int
+	MSgCode       State
+	PackedID      int
+	FrameBegin    int
+	FrameEnd      int
+	PayloadLength int
+	Payload       []byte
+	Rma           *net.UDPAddr
 }
 
 var fieldIndex = map[string]int{
@@ -104,53 +104,53 @@ func Decode(b []byte) (Package, error) {
 			if err != nil {
 				return out, fmt.Errorf("Sid: %w", err)
 			}
-			out.Sid = n
+			out.SessionID = n
 		case fieldUid:
 			n, err := strconv.Atoi(raw)
 			if err != nil {
 				return out, fmt.Errorf("Sid: %w", err)
 			}
-			out.Uid = n
+			out.UserID = n
 		case fieldMsg:
 			n, err := strconv.Atoi(raw)
 			if err != nil {
 				return out, fmt.Errorf("Msg: %w", err)
 			}
-			out.Msg = State(n)
+			out.MSgCode = State(n)
 		case fieldPId:
 			n, err := strconv.Atoi(raw)
 			if err != nil {
 				return out, fmt.Errorf("PId: %w", err)
 			}
-			out.Pid = n
+			out.PackedID = n
 		case fieldBid:
 			n, err := strconv.Atoi(raw)
 			if err != nil {
 				return out, fmt.Errorf("Bid: %w", err)
 			}
-			out.Bid = n
+			out.FrameBegin = n
 		case fieldLid:
 			n, err := strconv.Atoi(raw)
 			if err != nil {
 				return out, fmt.Errorf("Lid: %w", err)
 			}
-			out.Lid = n
+			out.FrameEnd = n
 		case fieldTol:
 			n, err := strconv.Atoi(raw)
 			if err != nil {
 				return out, fmt.Errorf("Tol: %v", err)
 			}
-			out.Tol = n
+			out.PayloadLength = n
 		case fieldPyl:
 			if raw == "" {
-				out.Pyl = nil
+				out.Payload = nil
 				continue
 			}
 			data, err := base64.StdEncoding.DecodeString(raw)
 			if err != nil {
 				return out, fmt.Errorf("Pyl (Base64): %w", err)
 			}
-			out.Pyl = data
+			out.Payload = data
 		case fieldRma:
 			if raw == "" {
 				out.Rma = nil
@@ -205,40 +205,40 @@ and you should enforce domain limits if negative values are not meaningful in yo
 func Encode(p Package) []byte {
 	var sb strings.Builder
 
-	sb.Grow(128 + len(p.Pyl))
+	sb.Grow(128 + len(p.Payload))
 
 	// ints
 	sb.WriteString("Sid:")
-	sb.WriteString(strconv.Itoa(p.Sid))
+	sb.WriteString(strconv.Itoa(p.SessionID))
 	sb.WriteByte('|')
 	sb.WriteString("Uid:")
-	sb.WriteString(strconv.Itoa(p.Uid))
+	sb.WriteString(strconv.Itoa(p.UserID))
 	sb.WriteByte('|')
 
 	sb.WriteString("Msg:")
-	sb.WriteString(strconv.Itoa(int(p.Msg)))
+	sb.WriteString(strconv.Itoa(int(p.MSgCode)))
 	sb.WriteByte('|')
 
 	sb.WriteString("PId:")
-	sb.WriteString(strconv.Itoa(p.Pid))
+	sb.WriteString(strconv.Itoa(p.PackedID))
 	sb.WriteByte('|')
 
 	sb.WriteString("Bid:")
-	sb.WriteString(strconv.Itoa(p.Bid))
+	sb.WriteString(strconv.Itoa(p.FrameBegin))
 	sb.WriteByte('|')
 
 	sb.WriteString("Lid:")
-	sb.WriteString(strconv.Itoa(p.Lid))
+	sb.WriteString(strconv.Itoa(p.FrameEnd))
 	sb.WriteByte('|')
 
 	sb.WriteString("Tol:")
-	sb.WriteString(strconv.Itoa(p.Tol))
+	sb.WriteString(strconv.Itoa(p.PayloadLength))
 	sb.WriteByte('|')
 
 	// payload → Base64
 	sb.WriteString("Pyl:")
-	if len(p.Pyl) > 0 {
-		sb.WriteString(base64.StdEncoding.EncodeToString(p.Pyl))
+	if len(p.Payload) > 0 {
+		sb.WriteString(base64.StdEncoding.EncodeToString(p.Payload))
 	}
 	sb.WriteByte('|')
 
