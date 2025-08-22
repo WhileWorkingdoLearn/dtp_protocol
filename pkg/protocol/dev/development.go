@@ -9,9 +9,59 @@ import (
 	udpsim "github.com/WhilecodingDoLearn/dtp/pkg/protocol/dev/sim"
 )
 
+const BufferSize = 1024
+
+type Buffer struct {
+	frames   [BufferSize]byte
+	size     int
+	received int
+}
+
+type FrameBuffer interface {
+	Read(b codec.Package) error
+	Flush()
+	Size() int
+}
+
+func (b *Buffer) Read(p codec.Package) error {
+	const bufferSize = len(b.frames) // 1024
+
+	if p.FrameBegin < 0 || p.FrameBegin >= bufferSize {
+		return fmt.Errorf("frame begin index %d out of range [0:%d]", p.FrameBegin, bufferSize-1)
+	}
+	if p.FrameEnd < 0 || p.FrameEnd >= bufferSize {
+		return fmt.Errorf("frame end index %d out of range [0:%d]", p.FrameEnd, bufferSize-1)
+	}
+
+	if p.FrameBegin > p.FrameEnd {
+		return fmt.Errorf("invalid frame range: begin %d > end %d", p.FrameBegin, p.FrameEnd)
+	}
+
+	expected := p.FrameEnd - p.FrameBegin + 1
+	if len(p.Payload) != expected {
+		return fmt.Errorf("payload length mismatch: got %d bytes, expected %d", len(p.Payload), expected)
+	}
+
+	// 4. Daten kopieren
+	copy(b.frames[p.FrameBegin:p.FrameEnd+1], p.Payload)
+	return nil
+}
+
+func (b *Buffer) Flush() {
+
+}
+
+func (b *Buffer) Size() int {
+	return len(b.frames)
+}
+
+func NewBuffer() FrameBuffer {
+	return &Buffer{frames: [1024]byte{}}
+}
+
 type ConnectionHandler struct {
 	state    codec.State
-	buffer   []codec.Package
+	buffer   FrameBuffer
 	dataSize int
 }
 
@@ -45,14 +95,18 @@ func handle(p codec.Package, connHandler *ConnectionHandler) (codec.Package, boo
 		}
 	case codec.ACK:
 		if connHandler.state == codec.OPN {
-			connHandler.buffer = make([]codec.Package, connHandler.dataSize, connHandler.dataSize)
+			connHandler.buffer = NewBuffer()
 			connHandler.state = codec.ALI
 			res.MSgCode = codec.ALI
 			return res, true
 		}
 	case codec.ALI:
 		if connHandler.state == codec.ALI {
-			if len(connHandler.buffer) > 0 {
+			if connHandler.buffer.Size() > 0 {
+				if connHandler.dataSize != p.PayloadLength {
+					res.MSgCode = codec.ERR
+					return res, true
+				}
 
 			}
 		}
