@@ -19,85 +19,91 @@ type DTPConnection struct {
 	packagesReceived int
 }
 
-func (connHandler *DTPConnection) handle(p codec.Package) (res codec.Package, sendResponse bool) {
+func (conn *DTPConnection) listen(p codec.Package) (res codec.Package, sendResponse bool) {
+	// Wir gehen davon aus, dass wir antworten, außer wir setzen es explizit auf false
+	sendResponse = true
 
-	connHandler.packagesReceived++
-
+	conn.packagesReceived++
 	res.SessionID = p.SessionID
 	res.PackedID = p.PackedID
 	res.FrameBegin = p.PackedID
 	res.FrameEnd = p.FrameEnd
 	res.PayloadLength = p.PayloadLength
 
-	validationErrror := connHandler.validate(p)
-	if validationErrror != nil {
-		fmt.Println(validationErrror)
+	// Validierung schlägt fehl → keine Antwort
+	if err := conn.validate(p); err != nil {
 		return res, false
 	}
+	conn.lastReceived = time.Now()
 
-	send := false
-	switch connHandler.state {
+	switch conn.state {
+
 	case codec.REQ:
-		{
-			if p.MSgCode == codec.REQ {
-				connHandler.sessionId = p.SessionID
-				connHandler.state = codec.OPN
-				res.MSgCode = codec.OPN
-			}
-
+		switch p.MSgCode {
+		case codec.REQ:
+			res.MSgCode = codec.OPN
+			conn.state = codec.OPN
+			return res, true
+		default:
+			res.MSgCode = codec.ERR
+			return res, true
 		}
 	case codec.OPN:
-		{
-			if p.MSgCode == codec.OPN {
-				connHandler.state = codec.ACK
-				res.MSgCode = codec.ACK
-			} else {
-				res.MSgCode = codec.ERR
-			}
+		switch p.MSgCode {
+		case codec.OPN:
+			res.MSgCode = codec.ACK
+			conn.state = codec.ACK
+			return res, true
+		default:
+			res.MSgCode = codec.ERR
+			return res, true
 		}
 	case codec.ACK:
-		{
-			if p.MSgCode == connHandler.state {
-				connHandler.buffer = NewBuffer()
-				connHandler.dataSize = p.PayloadLength
-				connHandler.state = codec.ALI
-				res.MSgCode = codec.ALI
-			}
+		switch p.MSgCode {
+		case codec.ACK:
+			res.MSgCode = codec.ALI
+			conn.state = codec.ALI
+			return res, true
+		default:
+			res.MSgCode = codec.ERR
+			return res, true
 		}
 	case codec.ALI:
-		{
-			if p.MSgCode == codec.RTY {
-				connHandler.buffer = NewBuffer()
-				
-			}
-			if p.MSgCode == codec.CLD {
-			}
-			if p.MSgCode == codec.ALI {
-
-			}
+		switch p.MSgCode {
+		case codec.ALI:
+			res.MSgCode = codec.ACK
+			return res, false
+		default:
+			res.MSgCode = codec.ERR
+			return res, true
 		}
 	case codec.RTY:
-		{
-
-		}
-	case codec.CLD:
-		{
-
-		}
-	case codec.ERR:
-		{
-			if p.MSgCode == codec.ERR {
-			}
-		}
-	default:
-		{
+		switch p.MSgCode {
+		case codec.RTY:
+			res.MSgCode = codec.ACK
+			return res, true
+		default:
 			res.MSgCode = codec.ERR
+			return res, true
 		}
+
+	case codec.CLD:
+		switch p.MSgCode {
+		case codec.CLD:
+			res.MSgCode = codec.ACK
+			return res, true
+		default:
+			res.MSgCode = codec.ERR
+			return res, true
+		}
+
+	default:
+		return res, false
 	}
+}
 
-	connHandler.lastReceived = time.Now()
+func (connHandler *DTPConnection) Write(p codec.Package) {
 
-	return res, send
 }
 
 func (connHandler *DTPConnection) validate(p codec.Package) error {
@@ -211,7 +217,7 @@ func main() {
 				continue
 			}
 
-			res, send := connHandler.handle(p)
+			res, send := connHandler.listen(p)
 
 			if send {
 				data := codec.Encode(res)

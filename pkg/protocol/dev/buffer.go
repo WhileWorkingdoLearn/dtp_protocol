@@ -21,13 +21,12 @@ type FrameBuffer interface {
 }
 
 func (b *Buffer) Read(p codec.Package) error {
-	const bufferSize = len(b.frames) // 1024
 
-	if p.FrameBegin < 0 || p.FrameBegin >= bufferSize {
-		return fmt.Errorf("frame begin index %d out of range [0:%d]", p.FrameBegin, bufferSize-1)
+	if p.FrameBegin < 0 || p.FrameBegin >= BufferSize {
+		return fmt.Errorf("frame begin index %d out of range [0:%d]", p.FrameBegin, BufferSize-1)
 	}
-	if p.FrameEnd < 0 || p.FrameEnd >= bufferSize {
-		return fmt.Errorf("frame end index %d out of range [0:%d]", p.FrameEnd, bufferSize-1)
+	if p.FrameEnd < 0 || p.FrameEnd >= BufferSize {
+		return fmt.Errorf("frame end index %d out of range [0:%d]", p.FrameEnd, BufferSize-1)
 	}
 
 	if p.FrameBegin > p.FrameEnd {
@@ -41,6 +40,7 @@ func (b *Buffer) Read(p codec.Package) error {
 
 	// 4. Daten kopieren
 	copy(b.frames[p.FrameBegin:p.FrameEnd+1], p.Payload)
+	b.received += p.PayloadLength
 	return nil
 }
 

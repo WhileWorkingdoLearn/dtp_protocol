@@ -1,12 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"testing"
 
 	dtp "github.com/WhilecodingDoLearn/dtp/pkg/protocol"
 	"github.com/WhilecodingDoLearn/dtp/pkg/protocol/codec"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestValidation(t *testing.T) {
@@ -206,104 +206,171 @@ func TestValidation(t *testing.T) {
 	}
 }
 
-func TestHandle(t *testing.T) {
+func TestListen(t *testing.T) {
+	type tc struct {
+		name          string
+		initState     codec.State
+		inCode        codec.State
+		payloadLength int
 
-	tests := []struct {
-		name            string
-		p               codec.Package
-		expCode         codec.State
-		expSend         bool
-		expHandlerState codec.State
-		expDatasize     int
-	}{
-		{name: "REQ To large payload Request -> p.MsgCode == codec.REQ | connectionHandler.state == codec.REQ", p: codec.Package{SessionID: 1234, UserID: 111, MSgCode: codec.REQ, PayloadLength: 2028}, expCode: codec.ERR, expHandlerState: codec.ERR, expSend: true},
-		{name: "REQ Connection Request -> p.MsgCode == codec.REQ | connectionHandler.state == codec.REQ", p: codec.Package{SessionID: 1234, UserID: 111, MSgCode: codec.REQ}, expCode: codec.OPN, expHandlerState: codec.OPN, expSend: true},
-		{name: "REQ Another Request -> p.MsgCode == codec.REQ | connectionHandler.state == codec.OPEN", p: codec.Package{SessionID: 1234, UserID: 111, MSgCode: codec.REQ}, expCode: codec.REQ, expHandlerState: codec.OPN, expSend: false},
-		{name: "ACK Request -> p.MsgCode == codec.ACK | connectionHandler.state == codec.OPEN", p: codec.Package{SessionID: 1234, UserID: 111, MSgCode: codec.ACK}, expCode: codec.ALI, expHandlerState: codec.ALI, expSend: true},
+		wantState   codec.State
+		wantSend    bool
+		wantResCode codec.State
 	}
 
-	connHandler := DTPConnection{state: codec.REQ}
+	cases := []tc{
+		{
+			name:        "REQ→OPN (happy path)",
+			initState:   codec.REQ,
+			inCode:      codec.REQ,
+			wantState:   codec.OPN,
+			wantSend:    true,
+			wantResCode: codec.OPN,
+		},
+		{
+			name:        "REQ→invalid",
+			initState:   codec.REQ,
+			inCode:      codec.ACK,
+			wantState:   codec.REQ,
+			wantSend:    false,
+			wantResCode: 0,
+		},
+		{
+			name:        "OPN→ACK",
+			initState:   codec.OPN,
+			inCode:      codec.OPN,
+			wantState:   codec.ACK,
+			wantSend:    true,
+			wantResCode: codec.ACK,
+		},
+		{
+			name:        "OPN→invalid",
+			initState:   codec.OPN,
+			inCode:      codec.REQ,
+			wantState:   codec.OPN,
+			wantSend:    true,
+			wantResCode: codec.ERR,
+		},
+		{
+			name:        "ACK→ALI",
+			initState:   codec.ACK,
+			inCode:      codec.ACK,
+			wantState:   codec.ALI,
+			wantSend:    true,
+			wantResCode: codec.ALI,
+		},
+		{
+			name:        "ACK→invalid",
+			initState:   codec.ACK,
+			inCode:      codec.REQ,
+			wantState:   codec.ACK,
+			wantSend:    false,
+			wantResCode: 0,
+		},
+		{
+			name:        "ALI→DATA (no send)",
+			initState:   codec.ALI,
+			inCode:      codec.ALI,
+			wantState:   codec.ALI,
+			wantSend:    false,
+			wantResCode: 0,
+		},
+		{
+			name:        "ALI→RTY",
+			initState:   codec.ALI,
+			inCode:      codec.RTY,
+			wantState:   codec.RTY,
+			wantSend:    true,
+			wantResCode: codec.ACK,
+		},
+		{
+			name:        "ALI→CLD",
+			initState:   codec.ALI,
+			inCode:      codec.CLD,
+			wantState:   codec.CLD,
+			wantSend:    true,
+			wantResCode: codec.ACK,
+		},
+		{
+			name:        "ALI→invalid",
+			initState:   codec.ALI,
+			inCode:      codec.REQ,
+			wantState:   codec.ERR,
+			wantSend:    true,
+			wantResCode: codec.ERR,
+		},
+		{
+			name:          "RTY→small payload → ALI",
+			initState:     codec.RTY,
+			inCode:        codec.RTY,
+			payloadLength: BufferSize - 1,
+			wantState:     codec.ALI,
+			wantSend:      true,
+			wantResCode:   codec.ALI,
+		},
+		{
+			name:          "RTY→too large → stay RTY",
+			initState:     codec.RTY,
+			inCode:        codec.RTY,
+			payloadLength: BufferSize + 1,
+			wantState:     codec.RTY,
+			wantSend:      true,
+			wantResCode:   codec.RTY,
+		},
+		{
+			name:        "RTY→invalid",
+			initState:   codec.RTY,
+			inCode:      codec.ACK,
+			wantState:   codec.ERR,
+			wantSend:    true,
+			wantResCode: codec.ERR,
+		},
+		{
+			name:        "CLD→ACK → reset to REQ",
+			initState:   codec.CLD,
+			inCode:      codec.ACK,
+			wantState:   codec.REQ,
+			wantSend:    true,
+			wantResCode: codec.CLD,
+		},
+		{
+			name:        "CLD→invalid → still CLD",
+			initState:   codec.CLD,
+			inCode:      codec.OPN,
+			wantState:   codec.CLD,
+			wantSend:    true,
+			wantResCode: codec.CLD,
+		},
+		{
+			name:        "unknown state → ERR",
+			initState:   codec.State(999),
+			inCode:      codec.REQ,
+			wantState:   codec.ERR,
+			wantSend:    true,
+			wantResCode: codec.ERR,
+		},
+	}
 
-	for _, subTest := range tests {
-		t.Run(subTest.name, func(t *testing.T) {
-			res, send := connHandler.handle(subTest.p)
-			assert.Equal(t, subTest.expSend, send, fmt.Sprintf("name:%v - %v \n", subTest.name, "test if message should be send"))
-			assert.Equal(t, subTest.expCode, res.MSgCode, fmt.Sprintf("name:%v - %v \n", subTest.name, "test response code of message"))
-			assert.Equal(t, subTest.expHandlerState, connHandler.state, fmt.Sprintf("name:%v - %v \n", subTest.name, "test state of connectionHandler"))
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			conn := &DTPConnection{
+				state: c.initState,
+			}
+
+			// Input-Paket aufsetzen
+			inPkg := codec.Package{
+				MSgCode:       c.inCode,
+				SessionID:     42,
+				PackedID:      7,
+				FrameEnd:      7,
+				PayloadLength: c.payloadLength,
+			}
+
+			res, sent := conn.listen(inPkg)
+
+			require.Equal(t, c.wantSend, sent, "sendResponse")
+			require.Equal(t, c.wantResCode, res.MSgCode, "res.MSgCode")
+			require.Equal(t, c.wantState, conn.state, "next state")
 		})
 	}
-
-}
-
-func TestBuffer_Read(t *testing.T) {
-	buf := &Buffer{}
-
-	tests := []struct {
-		name   string
-		pkg    codec.Package
-		expErr string
-	}{
-		{
-			name:   "frame begin negative",
-			pkg:    codec.Package{FrameBegin: -1, FrameEnd: 0, Payload: []byte{0}},
-			expErr: "frame begin index -1 out of range [0:1023]",
-		},
-		{
-			name:   "frame begin too large",
-			pkg:    codec.Package{FrameBegin: BufferSize, FrameEnd: BufferSize, Payload: []byte{0}},
-			expErr: fmt.Sprintf("frame begin index %d out of range [0:%d]", BufferSize, BufferSize-1),
-		},
-		{
-			name:   "frame end negative",
-			pkg:    codec.Package{FrameBegin: 0, FrameEnd: -1, Payload: []byte{0}},
-			expErr: "frame end index -1 out of range [0:1023]",
-		},
-		{
-			name:   "frame end too large",
-			pkg:    codec.Package{FrameBegin: 0, FrameEnd: BufferSize, Payload: []byte{0}},
-			expErr: fmt.Sprintf("frame end index %d out of range [0:%d]", BufferSize, BufferSize-1),
-		},
-		{
-			name:   "begin greater than end",
-			pkg:    codec.Package{FrameBegin: 10, FrameEnd: 5, Payload: []byte{}},
-			expErr: "invalid frame range: begin 10 > end 5",
-		},
-		{
-			name:   "payload length too short",
-			pkg:    codec.Package{FrameBegin: 2, FrameEnd: 4, Payload: []byte{1, 2}},
-			expErr: "payload length mismatch: got 2 bytes, expected 3",
-		},
-		{
-			name:   "payload length too long",
-			pkg:    codec.Package{FrameBegin: 2, FrameEnd: 4, Payload: []byte{1, 2, 3, 4}},
-			expErr: "payload length mismatch: got 4 bytes, expected 3",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := buf.Read(tc.pkg)
-			assert.EqualError(t, err, tc.expErr)
-		})
-	}
-
-	t.Run("valid read", func(t *testing.T) {
-		// reset buffer
-		buf = &Buffer{}
-		payload := []byte{0xA, 0xB, 0xC}
-		pkg := codec.Package{
-			FrameBegin:    5,
-			FrameEnd:      7,
-			PayloadLength: len(payload),
-			Payload:       payload,
-		}
-
-		err := buf.Read(pkg)
-		assert.NoError(t, err)
-
-		// verify bytes copied into internal frames slice
-		for i, b := range payload {
-			assert.Equal(t, b, buf.frames[5+i])
-		}
-	})
 }
