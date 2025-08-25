@@ -40,10 +40,11 @@ const (
 	REQ State = iota
 	OPN
 	ALI
-	CLD
 	ACK
+	CLD
 	RTY
 	ERR
+	STATECOUNT
 )
 
 type State int

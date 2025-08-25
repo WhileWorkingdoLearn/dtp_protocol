@@ -5,120 +5,178 @@ import (
 	"net"
 	"time"
 
+	dtp "github.com/WhilecodingDoLearn/dtp/pkg/protocol"
 	"github.com/WhilecodingDoLearn/dtp/pkg/protocol/codec"
 	udpsim "github.com/WhilecodingDoLearn/dtp/pkg/protocol/dev/sim"
 )
 
-const BufferSize = 1024
-
-type Buffer struct {
-	frames   [BufferSize]byte
-	size     int
-	received int
+type DTPConnection struct {
+	state            codec.State
+	buffer           FrameBuffer
+	dataSize         int
+	sessionId        int
+	lastReceived     time.Time
+	packagesReceived int
 }
 
-type FrameBuffer interface {
-	Read(b codec.Package) error
-	Flush()
-	Size() int
-}
+func (connHandler *DTPConnection) handle(p codec.Package) (res codec.Package, sendResponse bool) {
 
-func (b *Buffer) Read(p codec.Package) error {
-	const bufferSize = len(b.frames) // 1024
+	connHandler.packagesReceived++
 
-	if p.FrameBegin < 0 || p.FrameBegin >= bufferSize {
-		return fmt.Errorf("frame begin index %d out of range [0:%d]", p.FrameBegin, bufferSize-1)
-	}
-	if p.FrameEnd < 0 || p.FrameEnd >= bufferSize {
-		return fmt.Errorf("frame end index %d out of range [0:%d]", p.FrameEnd, bufferSize-1)
-	}
+	res.SessionID = p.SessionID
+	res.PackedID = p.PackedID
+	res.FrameBegin = p.PackedID
+	res.FrameEnd = p.FrameEnd
+	res.PayloadLength = p.PayloadLength
 
-	if p.FrameBegin > p.FrameEnd {
-		return fmt.Errorf("invalid frame range: begin %d > end %d", p.FrameBegin, p.FrameEnd)
+	validationErrror := connHandler.validate(p)
+	if validationErrror != nil {
+		fmt.Println(validationErrror)
+		return res, false
 	}
 
-	expected := p.FrameEnd - p.FrameBegin + 1
-	if len(p.Payload) != expected {
-		return fmt.Errorf("payload length mismatch: got %d bytes, expected %d", len(p.Payload), expected)
-	}
-
-	// 4. Daten kopieren
-	copy(b.frames[p.FrameBegin:p.FrameEnd+1], p.Payload)
-	return nil
-}
-
-func (b *Buffer) Flush() {
-
-}
-
-func (b *Buffer) Size() int {
-	return len(b.frames)
-}
-
-func NewBuffer() FrameBuffer {
-	return &Buffer{frames: [1024]byte{}}
-}
-
-type ConnectionHandler struct {
-	state    codec.State
-	buffer   FrameBuffer
-	dataSize int
-}
-
-func handle(p codec.Package, connHandler *ConnectionHandler) (codec.Package, bool) {
-	res := codec.Package{SessionID: p.SessionID, UserID: p.UserID, PackedID: p.PackedID, FrameBegin: p.FrameBegin, FrameEnd: p.FrameEnd, PayloadLength: p.PayloadLength, Payload: []byte{}, Rma: nil}
 	send := false
-	switch p.MSgCode {
+	switch connHandler.state {
 	case codec.REQ:
-		if connHandler.state == codec.ERR {
-			res.MSgCode = codec.ERR
-			if p.PayloadLength < 1024 {
-				connHandler.dataSize = p.PayloadLength
-				res.MSgCode = codec.OPN
+		{
+			if p.MSgCode == codec.REQ {
+				connHandler.sessionId = p.SessionID
 				connHandler.state = codec.OPN
+				res.MSgCode = codec.OPN
 			}
-			return res, true
+
 		}
-		if connHandler.state == codec.REQ {
-			if p.PayloadLength < 1024 {
-				connHandler.dataSize = p.PayloadLength
-				res.MSgCode = codec.OPN
-				connHandler.state = codec.OPN
+	case codec.OPN:
+		{
+			if p.MSgCode == codec.OPN {
+				connHandler.state = codec.ACK
+				res.MSgCode = codec.ACK
 			} else {
 				res.MSgCode = codec.ERR
-				connHandler.state = codec.ERR
 			}
-			return res, true
-		}
-		if connHandler.state == codec.OPN {
-			return res, false
 		}
 	case codec.ACK:
-		if connHandler.state == codec.OPN {
-			connHandler.buffer = NewBuffer()
-			connHandler.state = codec.ALI
-			res.MSgCode = codec.ALI
-			return res, true
+		{
+			if p.MSgCode == connHandler.state {
+				connHandler.buffer = NewBuffer()
+				connHandler.dataSize = p.PayloadLength
+				connHandler.state = codec.ALI
+				res.MSgCode = codec.ALI
+			}
 		}
 	case codec.ALI:
-		if connHandler.state == codec.ALI {
-			if connHandler.buffer.Size() > 0 {
-				if connHandler.dataSize != p.PayloadLength {
-					res.MSgCode = codec.ERR
-					return res, true
-				}
+		{
+			if p.MSgCode == codec.RTY {
+				connHandler.buffer = NewBuffer()
+				
+			}
+			if p.MSgCode == codec.CLD {
+			}
+			if p.MSgCode == codec.ALI {
 
 			}
 		}
-	case codec.ERR:
+	case codec.RTY:
+		{
 
+		}
+	case codec.CLD:
+		{
+
+		}
+	case codec.ERR:
+		{
+			if p.MSgCode == codec.ERR {
+			}
+		}
 	default:
 		{
-			res = codec.Package{SessionID: p.SessionID}
+			res.MSgCode = codec.ERR
 		}
 	}
 
+	connHandler.lastReceived = time.Now()
+
 	return res, send
+}
+
+func (connHandler *DTPConnection) validate(p codec.Package) error {
+	//SessionID
+	if p.SessionID < 0 {
+		return &dtp.PacketError{
+			Text:     "wrong sessions id",
+			Want:     0,
+			Has:      p.SessionID,
+			PacketID: p.PackedID,
+		}
+	}
+
+	//SessionID
+	if p.MSgCode != codec.REQ && p.SessionID != connHandler.sessionId {
+		return &dtp.PacketError{
+			Text:     "wrong sessions id",
+			Want:     connHandler.sessionId,
+			Has:      p.SessionID,
+			PacketID: p.PackedID,
+		}
+	}
+
+	//MSgCode
+	if p.MSgCode != connHandler.state && p.MSgCode != codec.RTY && p.MSgCode != codec.ERR {
+		return &dtp.PacketError{
+			Text:     "illigal packet state",
+			Want:     int(connHandler.state),
+			Has:      int(p.MSgCode),
+			PacketID: p.PackedID,
+		}
+	}
+	// PackedID
+	if p.PackedID < 0 {
+		return &dtp.PacketError{
+			Text:     "illigal packet id",
+			Want:     0,
+			Has:      p.PackedID,
+			PacketID: p.PackedID,
+		}
+	}
+	//FrameBegin
+	if p.FrameBegin < 0 || p.FrameBegin > BufferSize {
+		return &dtp.PacketError{
+			Text:     "frame begin out of range",
+			Want:     0,
+			Has:      p.FrameBegin,
+			PacketID: p.PackedID,
+		}
+	}
+	//FrameEnd
+	if p.FrameEnd < 0 || p.FrameEnd > BufferSize {
+		return &dtp.PacketError{
+			Text:     "frame end out of range",
+			Want:     BufferSize,
+			Has:      p.FrameEnd,
+			PacketID: p.PackedID,
+		}
+	}
+	// PayloadLength
+	if p.PayloadLength < 0 || p.PayloadLength > BufferSize {
+		return &dtp.PacketError{
+			Text:     "invalid payload size",
+			Want:     BufferSize,
+			Has:      p.PayloadLength,
+			PacketID: p.PackedID,
+		}
+	}
+	// Payload
+	if len(p.Payload) != p.PayloadLength {
+		return &dtp.PacketError{
+			Text:     "corrupt payload size",
+			Want:     p.PayloadLength,
+			Has:      len(p.Payload),
+			PacketID: p.PackedID,
+		}
+	}
+	//Rma * net.UDPAddr...
+	return nil
 }
 
 func main() {
@@ -137,7 +195,7 @@ func main() {
 	defer server.Close()
 
 	go func() {
-		connHandler := ConnectionHandler{}
+		connHandler := DTPConnection{}
 
 		for {
 			readBuf := make([]byte, 1024)
@@ -153,7 +211,7 @@ func main() {
 				continue
 			}
 
-			res, send := handle(p, &connHandler)
+			res, send := connHandler.handle(p)
 
 			if send {
 				data := codec.Encode(res)
