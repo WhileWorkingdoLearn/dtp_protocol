@@ -16,89 +16,151 @@ type DTPConnection struct {
 	dataSize         int
 	sessionId        int
 	lastReceived     time.Time
+	lastChangeId     int
 	packagesReceived int
 }
 
-func (conn *DTPConnection) listen(p codec.Package) (res codec.Package, sendResponse bool) {
-	// Wir gehen davon aus, dass wir antworten, außer wir setzen es explizit auf false
-	sendResponse = true
+// --- Guards: müssen je nach Protokoll implementiert werden ---
+func wantsConnect(p codec.Package) bool {
+	return p.MSgCode == codec.REQ
+}
+func wantsOpen(p codec.Package) bool      { return p.MSgCode == codec.OPN }
+func isAlive(p codec.Package) bool        { return p.MSgCode == codec.ALI }
+func needRetry(p codec.Package) bool      { return p.MSgCode == codec.RTY }
+func shouldFinish(p codec.Package) bool   { return p.MSgCode == codec.FIN }
+func shouldCloseNow(p codec.Package) bool { return p.MSgCode == codec.CLD }
+func retryOK(p codec.Package) bool        { return p.MSgCode == codec.ACK }
+func wantReopen(p codec.Package) bool     { return p.MSgCode == codec.OPN }
 
+// listen verarbeitet den FSM-Flow ausschließlich über State + Guard-Helper.
+//
+// Happy Path (logisch):
+// REQ -> OPN -> ACK -> ALI -> FIN -> CLD
+//
+// Nebenpfade:
+// - ALI: needRetry -> RTY | shouldFinish -> FIN | shouldCloseNow -> CLD | isAlive -> keepalive (silent)
+// - RTY: retryOK -> ALI | else -> ERR
+// - FIN: wantReopen -> OPN | else -> CLD
+// - ERR: wantsOpen -> OPN | else -> ERR (mit Antwort)
+//
+// Beachte die Priorität in ALI: Retry > Finish > CloseNow > Keepalive > sonst ERR.
+func (conn *DTPConnection) listen(p codec.Package) (res codec.Package, sendResponse bool) {
+	sendResponse = false
 	conn.packagesReceived++
 	res.SessionID = p.SessionID
 	res.PackedID = p.PackedID
 	res.FrameBegin = p.PackedID
 	res.FrameEnd = p.FrameEnd
 	res.PayloadLength = p.PayloadLength
-
-	// Validierung schlägt fehl → keine Antwort
-	if err := conn.validate(p); err != nil {
-		return res, false
-	}
-	conn.lastReceived = time.Now()
-
 	switch conn.state {
 
 	case codec.REQ:
-		switch p.MSgCode {
-		case codec.REQ:
+		// Start: Gegenstück signalisiert Verbindungswunsch?
+		if wantsConnect(p) {
 			res.MSgCode = codec.OPN
 			conn.state = codec.OPN
 			return res, true
-		default:
-			res.MSgCode = codec.ERR
-			return res, true
 		}
+		res.MSgCode = codec.ERR
+		conn.state = codec.ERR
+		return res, true
+
 	case codec.OPN:
-		switch p.MSgCode {
-		case codec.OPN:
+		// Öffnen/Handshake-Schritt fortsetzen?
+		if wantsOpen(p) {
 			res.MSgCode = codec.ACK
 			conn.state = codec.ACK
 			return res, true
-		default:
-			res.MSgCode = codec.ERR
+		}
+		if shouldCloseNow(p) {
+			res.MSgCode = codec.CLD
+			conn.state = codec.CLD
 			return res, true
 		}
+		res.MSgCode = codec.ERR
+		conn.state = codec.ERR
+		return res, true
+
 	case codec.ACK:
-		switch p.MSgCode {
-		case codec.ACK:
+		// Nächster Schritt nach ACK ist "alive/ready" -> ALI
+		if isAlive(p) {
 			res.MSgCode = codec.ALI
 			conn.state = codec.ALI
 			return res, true
-		default:
-			res.MSgCode = codec.ERR
-			return res, true
 		}
+		res.MSgCode = codec.ERR
+		conn.state = codec.ERR
+		return res, true
+
 	case codec.ALI:
-		switch p.MSgCode {
-		case codec.ALI:
-			res.MSgCode = codec.ACK
+		// Priorisierte Abzweigungen aus der Arbeitsphase
+		if needRetry(p) {
+			res.MSgCode = codec.RTY
+			conn.state = codec.RTY
+			return res, true
+		}
+		if shouldFinish(p) {
+			res.MSgCode = codec.FIN
+			conn.state = codec.FIN
+			return res, true
+		}
+		if shouldCloseNow(p) {
+			res.MSgCode = codec.CLD
+			conn.state = codec.CLD
+			return res, true
+		}
+		if isAlive(p) {
+			// Keepalive: nichts senden
 			return res, false
-		default:
-			res.MSgCode = codec.ERR
-			return res, true
 		}
+		// Unerwartetes in ALI -> Fehler
+		res.MSgCode = codec.ERR
+		conn.state = codec.ERR
+		return res, true
+
 	case codec.RTY:
-		switch p.MSgCode {
-		case codec.RTY:
-			res.MSgCode = codec.ACK
-			return res, true
-		default:
-			res.MSgCode = codec.ERR
+		// Retry-Phase: entweder zurück nach ALI oder Fehler
+		if retryOK(p) {
+			res.MSgCode = codec.ALI
+			conn.state = codec.ALI
 			return res, true
 		}
+		res.MSgCode = codec.ERR
+		conn.state = codec.ERR
+		return res, true
+
+	case codec.FIN:
+		// Abschluss: Reopen oder endgültig schließen
+		if wantReopen(p) {
+			res.MSgCode = codec.OPN
+			conn.state = codec.OPN
+			return res, true
+		}
+		// Default: schließen
+		res.MSgCode = codec.CLD
+		conn.state = codec.CLD
+		return res, true
 
 	case codec.CLD:
-		switch p.MSgCode {
-		case codec.CLD:
-			res.MSgCode = codec.ACK
-			return res, true
-		default:
-			res.MSgCode = codec.ERR
+		// Terminal: keine Antworten mehr
+		return res, false
+
+	case codec.ERR:
+		// Recovery nur via "wantsOpen" (Neustart/Handshake)
+		if wantsOpen(p) {
+			res.MSgCode = codec.OPN
+			conn.state = codec.OPN
 			return res, true
 		}
+		res.MSgCode = codec.ERR
+		// in ERR verbleiben
+		return res, true
 
 	default:
-		return res, false
+		// Unbekannter State -> Fehlerzustand
+		res.MSgCode = codec.ERR
+		conn.state = codec.ERR
+		return res, true
 	}
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	dtp "github.com/WhilecodingDoLearn/dtp/pkg/protocol"
 	"github.com/WhilecodingDoLearn/dtp/pkg/protocol/codec"
@@ -206,171 +207,139 @@ func TestValidation(t *testing.T) {
 	}
 }
 
-func TestListen(t *testing.T) {
-	type tc struct {
-		name          string
-		initState     codec.State
-		inCode        codec.State
-		payloadLength int
+// Helpers für Tests
 
-		wantState   codec.State
-		wantSend    bool
-		wantResCode codec.State
+func newConnWithState(s codec.State) *DTPConnection {
+	return &DTPConnection{
+		state:        s,
+		lastReceived: time.Now(),
+	}
+}
+
+func makePkg(msg codec.State) codec.Package {
+	return codec.Package{
+		MSgCode:       msg,
+		SessionID:     42,
+		PackedID:      7,
+		FrameEnd:      99,
+		PayloadLength: 1234,
+	}
+}
+
+type transitionCase struct {
+	name         string
+	startState   codec.State
+	inMsg        codec.State
+	expNextState codec.State
+	expOutMsg    *codec.State // nil => nicht prüfen (z. B. bei keepalive/silent)
+	expSend      bool
+}
+
+// Einzelne Transitionen als Tabelle abprüfen.
+func TestFSM_Transitions_Table(t *testing.T) {
+	cases := []transitionCase{
+		// Happy Path
+		{name: "REQ + REQ -> OPN", startState: codec.REQ, inMsg: codec.REQ, expNextState: codec.OPN, expOutMsg: ptr(codec.OPN), expSend: true},
+		{name: "OPN + OPN -> ACK", startState: codec.OPN, inMsg: codec.OPN, expNextState: codec.ACK, expOutMsg: ptr(codec.ACK), expSend: true},
+		{name: "ACK + ALI -> ALI", startState: codec.ACK, inMsg: codec.ALI, expNextState: codec.ALI, expOutMsg: ptr(codec.ALI), expSend: true},
+
+		// ALI: keepalive (silent)
+		{name: "ALI + ALI (keepalive) -> ALI silent", startState: codec.ALI, inMsg: codec.ALI, expNextState: codec.ALI, expOutMsg: nil, expSend: false},
+
+		// ALI: Abzweigungen
+		{name: "ALI + RTY -> RTY", startState: codec.ALI, inMsg: codec.RTY, expNextState: codec.RTY, expOutMsg: ptr(codec.RTY), expSend: true},
+		{name: "ALI + FIN -> FIN", startState: codec.ALI, inMsg: codec.FIN, expNextState: codec.FIN, expOutMsg: ptr(codec.FIN), expSend: true},
+		{name: "ALI + CLD -> CLD", startState: codec.ALI, inMsg: codec.CLD, expNextState: codec.CLD, expOutMsg: ptr(codec.CLD), expSend: true},
+
+		// ALI: unerwartete Message -> ERR
+		{name: "ALI + OPN (unexpected) -> ERR", startState: codec.ALI, inMsg: codec.OPN, expNextState: codec.ERR, expOutMsg: ptr(codec.ERR), expSend: true},
+
+		// RTY
+		{name: "RTY + ACK (retryOK) -> ALI", startState: codec.RTY, inMsg: codec.ACK, expNextState: codec.ALI, expOutMsg: ptr(codec.ALI), expSend: true},
+		{name: "RTY + OPN (fail) -> ERR", startState: codec.RTY, inMsg: codec.OPN, expNextState: codec.ERR, expOutMsg: ptr(codec.ERR), expSend: true},
+
+		// FIN
+		{name: "FIN + OPN (reopen) -> OPN", startState: codec.FIN, inMsg: codec.OPN, expNextState: codec.OPN, expOutMsg: ptr(codec.OPN), expSend: true},
+		{name: "FIN + FIN (close) -> CLD", startState: codec.FIN, inMsg: codec.FIN, expNextState: codec.CLD, expOutMsg: ptr(codec.CLD), expSend: true},
+
+		// ERR
+		{name: "ERR + OPN (recovery) -> OPN", startState: codec.ERR, inMsg: codec.OPN, expNextState: codec.OPN, expOutMsg: ptr(codec.OPN), expSend: true},
+		{name: "ERR + FIN (stay err) -> ERR", startState: codec.ERR, inMsg: codec.FIN, expNextState: codec.ERR, expOutMsg: ptr(codec.ERR), expSend: true},
+
+		// CLD terminal
+		{name: "CLD + ALI (terminal, silent)", startState: codec.CLD, inMsg: codec.ALI, expNextState: codec.CLD, expOutMsg: nil, expSend: false},
 	}
 
-	cases := []tc{
-		{
-			name:        "REQ→OPN (happy path)",
-			initState:   codec.REQ,
-			inCode:      codec.REQ,
-			wantState:   codec.OPN,
-			wantSend:    true,
-			wantResCode: codec.OPN,
-		},
-		{
-			name:        "REQ→invalid",
-			initState:   codec.REQ,
-			inCode:      codec.ACK,
-			wantState:   codec.REQ,
-			wantSend:    false,
-			wantResCode: 0,
-		},
-		{
-			name:        "OPN→ACK",
-			initState:   codec.OPN,
-			inCode:      codec.OPN,
-			wantState:   codec.ACK,
-			wantSend:    true,
-			wantResCode: codec.ACK,
-		},
-		{
-			name:        "OPN→invalid",
-			initState:   codec.OPN,
-			inCode:      codec.REQ,
-			wantState:   codec.OPN,
-			wantSend:    true,
-			wantResCode: codec.ERR,
-		},
-		{
-			name:        "ACK→ALI",
-			initState:   codec.ACK,
-			inCode:      codec.ACK,
-			wantState:   codec.ALI,
-			wantSend:    true,
-			wantResCode: codec.ALI,
-		},
-		{
-			name:        "ACK→invalid",
-			initState:   codec.ACK,
-			inCode:      codec.REQ,
-			wantState:   codec.ACK,
-			wantSend:    false,
-			wantResCode: 0,
-		},
-		{
-			name:        "ALI→DATA (no send)",
-			initState:   codec.ALI,
-			inCode:      codec.ALI,
-			wantState:   codec.ALI,
-			wantSend:    false,
-			wantResCode: 0,
-		},
-		{
-			name:        "ALI→RTY",
-			initState:   codec.ALI,
-			inCode:      codec.RTY,
-			wantState:   codec.RTY,
-			wantSend:    true,
-			wantResCode: codec.ACK,
-		},
-		{
-			name:        "ALI→CLD",
-			initState:   codec.ALI,
-			inCode:      codec.CLD,
-			wantState:   codec.CLD,
-			wantSend:    true,
-			wantResCode: codec.ACK,
-		},
-		{
-			name:        "ALI→invalid",
-			initState:   codec.ALI,
-			inCode:      codec.REQ,
-			wantState:   codec.ERR,
-			wantSend:    true,
-			wantResCode: codec.ERR,
-		},
-		{
-			name:          "RTY→small payload → ALI",
-			initState:     codec.RTY,
-			inCode:        codec.RTY,
-			payloadLength: BufferSize - 1,
-			wantState:     codec.ALI,
-			wantSend:      true,
-			wantResCode:   codec.ALI,
-		},
-		{
-			name:          "RTY→too large → stay RTY",
-			initState:     codec.RTY,
-			inCode:        codec.RTY,
-			payloadLength: BufferSize + 1,
-			wantState:     codec.RTY,
-			wantSend:      true,
-			wantResCode:   codec.RTY,
-		},
-		{
-			name:        "RTY→invalid",
-			initState:   codec.RTY,
-			inCode:      codec.ACK,
-			wantState:   codec.ERR,
-			wantSend:    true,
-			wantResCode: codec.ERR,
-		},
-		{
-			name:        "CLD→ACK → reset to REQ",
-			initState:   codec.CLD,
-			inCode:      codec.ACK,
-			wantState:   codec.REQ,
-			wantSend:    true,
-			wantResCode: codec.CLD,
-		},
-		{
-			name:        "CLD→invalid → still CLD",
-			initState:   codec.CLD,
-			inCode:      codec.OPN,
-			wantState:   codec.CLD,
-			wantSend:    true,
-			wantResCode: codec.CLD,
-		},
-		{
-			name:        "unknown state → ERR",
-			initState:   codec.State(999),
-			inCode:      codec.REQ,
-			wantState:   codec.ERR,
-			wantSend:    true,
-			wantResCode: codec.ERR,
-		},
-	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			conn := newConnWithState(tc.startState)
+			in := makePkg(tc.inMsg)
 
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			conn := &DTPConnection{
-				state: c.initState,
+			res, send := conn.listen(in)
+
+			// State-Übergang
+			assert.Equal(t, tc.expNextState, conn.state, "next state mismatch")
+
+			// sendResponse
+			assert.Equal(t, tc.expSend, send, "sendResponse mismatch")
+
+			// Out MsgCode (falls spezifiziert)
+			if tc.expOutMsg != nil {
+				assert.Equal(t, *tc.expOutMsg, res.MSgCode, "response MSgCode mismatch")
+			} else {
+				// Bei silent-Fällen prüfen wir nur, dass wir NICHT gesendet haben
+				assert.False(t, send, "expected silent (no send)")
 			}
 
-			// Input-Paket aufsetzen
-			inPkg := codec.Package{
-				MSgCode:       c.inCode,
-				SessionID:     42,
-				PackedID:      7,
-				FrameEnd:      7,
-				PayloadLength: c.payloadLength,
-			}
-
-			res, sent := conn.listen(inPkg)
-
-			require.Equal(t, c.wantSend, sent, "sendResponse")
-			require.Equal(t, c.wantResCode, res.MSgCode, "res.MSgCode")
-			require.Equal(t, c.wantState, conn.state, "next state")
+			// Kopierte Felder müssen immer gleich sein
+			require.Equal(t, in.SessionID, res.SessionID, "SessionID must be copied")
+			require.Equal(t, in.PackedID, res.PackedID, "PackedID must be copied")
+			require.Equal(t, in.PackedID, res.FrameBegin, "FrameBegin must equal input PackedID")
+			require.Equal(t, in.FrameEnd, res.FrameEnd, "FrameEnd must be copied")
+			require.Equal(t, in.PayloadLength, res.PayloadLength, "PayloadLength must be copied")
 		})
 	}
 }
+
+// End-to-End Happy Path als Sequenztest: REQ -> OPN -> ACK -> ALI -> FIN -> CLD
+func TestFSM_HappyPath_Sequence(t *testing.T) {
+	conn := newConnWithState(codec.REQ)
+
+	// REQ + REQ -> OPN
+	res, send := conn.listen(makePkg(codec.REQ))
+	require.True(t, send)
+	require.Equal(t, codec.OPN, res.MSgCode)
+	require.Equal(t, codec.OPN, conn.state)
+
+	// OPN + OPN -> ACK
+	res, send = conn.listen(makePkg(codec.OPN))
+	require.True(t, send)
+	require.Equal(t, codec.ACK, res.MSgCode)
+	require.Equal(t, codec.ACK, conn.state)
+
+	// ACK + ALI -> ALI
+	res, send = conn.listen(makePkg(codec.ALI))
+	require.True(t, send)
+	require.Equal(t, codec.ALI, res.MSgCode)
+	require.Equal(t, codec.ALI, conn.state)
+
+	// ALI + FIN -> FIN
+	res, send = conn.listen(makePkg(codec.FIN))
+	require.True(t, send)
+	require.Equal(t, codec.FIN, res.MSgCode)
+	require.Equal(t, codec.FIN, conn.state)
+
+	// FIN + FIN -> CLD
+	res, send = conn.listen(makePkg(codec.FIN))
+	require.True(t, send)
+	require.Equal(t, codec.CLD, res.MSgCode)
+	require.Equal(t, codec.CLD, conn.state)
+
+	// CLD + (anything) -> silent, stays CLD
+	_, send = conn.listen(makePkg(codec.ALI))
+	require.False(t, send)
+	require.Equal(t, codec.CLD, conn.state)
+}
+
+// Utility: Pointer auf State für optionale Erwartung
+func ptr(s codec.State) *codec.State { return &s }

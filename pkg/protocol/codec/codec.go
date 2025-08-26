@@ -41,9 +41,10 @@ const (
 	OPN
 	ALI
 	ACK
-	CLD
+	FIN
 	RTY
 	ERR
+	CLD
 	STATECOUNT
 )
 
