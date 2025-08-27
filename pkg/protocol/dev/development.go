@@ -79,7 +79,7 @@ func needRetry(p codec.Package) bool      { return p.MSgCode == codec.RTY }
 func shouldFinish(p codec.Package) bool   { return p.MSgCode == codec.FIN }
 func shouldCloseNow(p codec.Package) bool { return p.MSgCode == codec.CLD }
 func retryOK(p codec.Package) bool        { return p.MSgCode == codec.ACK }
-func wantReopen(p codec.Package) bool     { return p.MSgCode == codec.OPN }
+func wantNext(p codec.Package) bool     { return p.MSgCode == codec.OPN }
 
 func changeConnState(connState codec.State, p codec.Package) (prevState codec.State, nextState codec.State) {
 	switch connState {
@@ -135,7 +135,7 @@ func changeConnState(connState codec.State, p codec.Package) (prevState codec.St
 
 	case codec.FIN:
 		// Abschluss: Reopen oder endgültig schließen
-		if wantReopen(p) {
+		if wantNext(p) {
 			return connState, codec.OPN
 		}
 		// Default: schließen
