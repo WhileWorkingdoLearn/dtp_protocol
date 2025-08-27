@@ -211,6 +211,7 @@ func TestValidation(t *testing.T) {
 
 func newConnWithState(s codec.State) *DTPConnection {
 	return &DTPConnection{
+		prevState:    s,
 		state:        s,
 		lastReceived: time.Now(),
 	}
