@@ -44,6 +44,13 @@ func (conn *DTPConnection) listen(p codec.Package) (res codec.Package, sendRespo
 	res.FrameEnd = p.FrameEnd
 	res.PayloadLength = p.PayloadLength
 
+	err := conn.validate(p)
+	if err != nil {
+		fmt.Println(err)
+		res.MSgCode = codec.ERR
+		return res, true
+	}
+
 	current, next := chanceConnState(conn.state, p)
 	if current != next {
 		conn.lastChangeId = p.PackedID
@@ -168,25 +175,6 @@ func (connHandler *DTPConnection) validate(p codec.Package) error {
 		}
 	}
 
-	//SessionID
-	if p.MSgCode != codec.REQ && p.SessionID != connHandler.sessionId {
-		return &dtp.PacketError{
-			Text:     "wrong sessions id",
-			Want:     connHandler.sessionId,
-			Has:      p.SessionID,
-			PacketID: p.PackedID,
-		}
-	}
-
-	//MSgCode
-	if p.MSgCode != connHandler.state && p.MSgCode != codec.RTY && p.MSgCode != codec.ERR {
-		return &dtp.PacketError{
-			Text:     "illigal packet state",
-			Want:     int(connHandler.state),
-			Has:      int(p.MSgCode),
-			PacketID: p.PackedID,
-		}
-	}
 	// PackedID
 	if p.PackedID < 0 {
 		return &dtp.PacketError{

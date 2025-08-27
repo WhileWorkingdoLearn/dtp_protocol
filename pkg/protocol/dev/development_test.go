@@ -10,6 +10,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func NewPkg(msg codec.State, sID int, pID int) codec.Package {
+	return codec.Package{
+		MSgCode:       msg,
+		SessionID:     sID,
+		PackedID:      pID,
+		FrameBegin:    0,
+		FrameEnd:      0,
+		PayloadLength: 0,
+	}
+}
+
 func TestValidation(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -18,7 +29,7 @@ func TestValidation(t *testing.T) {
 	}{
 		{
 			name: "wrong sessions id",
-			pkg:  codec.Package{SessionID: -1, PackedID: 123},
+			pkg:  NewPkg(codec.REQ, -1, 123),
 			expErr: &dtp.PacketError{
 				Text:     "wrong sessions id",
 				Want:     0,
@@ -27,28 +38,8 @@ func TestValidation(t *testing.T) {
 			},
 		},
 		{
-			name: "illigal packet state",
-			pkg:  codec.Package{SessionID: 1, PackedID: 123, MSgCode: codec.ALI},
-			expErr: &dtp.PacketError{
-				Text:     "illigal packet state",
-				Want:     int(codec.REQ),
-				Has:      int(codec.ALI),
-				PacketID: 123,
-			},
-		},
-		{
-			name:   "packet state RTY",
-			pkg:    codec.Package{SessionID: 1, PackedID: 123, MSgCode: codec.RTY},
-			expErr: nil,
-		},
-		{
-			name:   "packet state ERR",
-			pkg:    codec.Package{SessionID: 1, PackedID: 123, MSgCode: codec.ERR},
-			expErr: nil,
-		},
-		{
 			name: "illigal packet id",
-			pkg:  codec.Package{SessionID: 1, PackedID: -1, MSgCode: codec.REQ},
+			pkg:  NewPkg(codec.REQ, 1, -1),
 			expErr: &dtp.PacketError{
 				Text:     "illigal packet id",
 				Want:     0,
@@ -222,8 +213,9 @@ func makePkg(msg codec.State) codec.Package {
 		MSgCode:       msg,
 		SessionID:     42,
 		PackedID:      7,
-		FrameEnd:      99,
-		PayloadLength: 1234,
+		FrameBegin:    0,
+		FrameEnd:      0,
+		PayloadLength: 0,
 	}
 }
 

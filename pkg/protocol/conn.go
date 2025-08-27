@@ -19,7 +19,7 @@ func NewDTP() (Conn, error) {
 	return &DTPConnection{}, nil
 }
 
-func (c DTPConnection) ReadMessage() (*Message, error) {
+func (c *DTPConnection) ReadMessage() (*Message, error) {
 
 	var msg *Message
 	for !c.dtpReader.Done() {
