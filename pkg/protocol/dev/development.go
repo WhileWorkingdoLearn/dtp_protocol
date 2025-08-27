@@ -51,19 +51,19 @@ func (conn *DTPConnection) listen(p codec.Package) (res codec.Package, sendRespo
 		return res, true
 	}
 
-	current, next := chanceConnState(conn.state, p)
-	if current != next {
+	prev, next := changeConnState(conn.state, p)
+	if prev != next {
 		conn.lastChangeId = p.PackedID
 		conn.lastChangeTime = time.Now()
 	}
-	conn.prevState = current
+	conn.prevState = prev
 	conn.state = next
 	res.MSgCode = next
-	if current == codec.ALI && next == codec.ALI {
+	if prev == codec.ALI && next == codec.ALI {
 
 		return res, false
 	}
-	if current == codec.CLD && next == codec.CLD {
+	if prev == codec.CLD && next == codec.CLD {
 		return res, false
 	}
 	return res, true
@@ -81,7 +81,7 @@ func shouldCloseNow(p codec.Package) bool { return p.MSgCode == codec.CLD }
 func retryOK(p codec.Package) bool        { return p.MSgCode == codec.ACK }
 func wantReopen(p codec.Package) bool     { return p.MSgCode == codec.OPN }
 
-func chanceConnState(connState codec.State, p codec.Package) (prevState codec.State, nextState codec.State) {
+func changeConnState(connState codec.State, p codec.Package) (prevState codec.State, nextState codec.State) {
 	switch connState {
 
 	case codec.REQ:
