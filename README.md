@@ -1,6 +1,5 @@
-Komponenten in deinem Code
 
-Hier sind die wichtigsten Module/Domänen, die du in deinem Code abbilden solltest – jeweils mit rudimentärem Fokus:
+
 1. Transport Layer (UDP-Socket Handling)
 
     Non-blocking UDP-Socket
@@ -11,11 +10,7 @@ Hier sind die wichtigsten Module/Domänen, die du in deinem Code abbilden sollte
 
 2. Packet Framing
 
-    Eigener Header:
-    c
-
-
-Prozessablauf: Minimaler QUIC-ähnlicher Flow
+3.Prozessablauf: Minimaler QUIC-ähnlicher Flow
 
     Client sendet Initial-Paket → Enthält Session-ID, Version, optional ein Token oder Public Key.
 
